@@ -222,7 +222,18 @@ void main() {
         final document = context.findEditContext().document;
 
         // Place the caret at the end of the list item.
-        await tester.placeCaretInParagraph(document.nodes.first.id, 6);
+        await tester.placeCaretInParagraph(document.nodes.last.id, 6);
+
+        // Type at the end of the list item to generate a composing region,
+        // simulating the Samsung keyboard.
+        await tester.typeImeText('2');
+        await tester.ime.sendDeltas(const [
+          TextEditingDeltaNonTextUpdate(
+            oldText: '. Item 12',
+            selection: TextSelection.collapsed(offset: 9),
+            composing: TextRange.collapsed(9),
+          ),
+        ], getter: imeClientGetter);
 
         // Press enter to create a new list item.
         await tester.pressEnter();
@@ -232,7 +243,7 @@ void main() {
 
         // Ensure the existing item remains the same.
         expect(document.nodes.first, isA<ListItemNode>());
-        expect((document.nodes.first as ListItemNode).text.text, "Item 1");
+        expect((document.nodes.first as ListItemNode).text.text, "Item 12");
 
         // Ensure the new item has the correct list item type and indentation.
         expect(document.nodes.last, isA<ListItemNode>());
@@ -261,6 +272,17 @@ void main() {
         // Place the caret at the end of the list item.
         await tester.placeCaretInParagraph(document.nodes.first.id, 6);
 
+        // Type at the end of the list item to generate a composing region,
+        // simulating the Samsung keyboard.
+        await tester.typeImeText('2');
+        await tester.ime.sendDeltas(const [
+          TextEditingDeltaNonTextUpdate(
+            oldText: '. Item 12',
+            selection: TextSelection.collapsed(offset: 9),
+            composing: TextRange.collapsed(9),
+          ),
+        ], getter: imeClientGetter);
+
         // On Android, pressing ENTER generates a "\n" insertion.
         await tester.typeImeText("\n");
 
@@ -269,7 +291,7 @@ void main() {
 
         // Ensure the existing item remains the same.
         expect(document.nodes.first, isA<ListItemNode>());
-        expect((document.nodes.first as ListItemNode).text.text, "Item 1");
+        expect((document.nodes.first as ListItemNode).text.text, "Item 12");
 
         // Ensure the new item has the correct list item type and indentation.
         expect(document.nodes.last, isA<ListItemNode>());
@@ -298,6 +320,17 @@ void main() {
         // Place the caret at the end of the list item.
         await tester.placeCaretInParagraph(document.nodes.first.id, 6);
 
+        // Type at the end of the list item to generate a composing region,
+        // simulating the Samsung keyboard.
+        await tester.typeImeText('2');
+        await tester.ime.sendDeltas(const [
+          TextEditingDeltaNonTextUpdate(
+            oldText: '. Item 12',
+            selection: TextSelection.collapsed(offset: 9),
+            composing: TextRange.collapsed(9),
+          ),
+        ], getter: imeClientGetter);
+
         // On iOS, pressing ENTER generates a newline action.
         await tester.testTextInput.receiveAction(TextInputAction.newline);
 
@@ -306,7 +339,7 @@ void main() {
 
         // Ensure the existing item remains the same.
         expect(document.nodes.first, isA<ListItemNode>());
-        expect((document.nodes.first as ListItemNode).text.text, "Item 1");
+        expect((document.nodes.first as ListItemNode).text.text, "Item 12");
 
         // Ensure the new item has the correct list item type and indentation.
         expect(document.nodes.last, isA<ListItemNode>());
@@ -427,6 +460,98 @@ void main() {
     });
 
     group('ordered list', () {
+      testWidgetsOnArbitraryDesktop('keeps sequence for items split by unordered list', (tester) async {
+        final context = await tester //
+            .createDocument()
+            .fromMarkdown("""
+1. First ordered item
+   - First unordered item
+   - Second unoredered item
+
+2. Second ordered item
+   - First unordered item
+   - Second unoredered item""") //
+            .pump();
+
+        expect(context.document.nodes.length, 6);
+
+        // Ensure the nodes have the correct type.
+        expect(context.document.nodes[0], isA<ListItemNode>());
+        expect((context.document.nodes[0] as ListItemNode).type, ListItemType.ordered);
+
+        expect(context.document.nodes[1], isA<ListItemNode>());
+        expect((context.document.nodes[1] as ListItemNode).type, ListItemType.unordered);
+
+        expect(context.document.nodes[2], isA<ListItemNode>());
+        expect((context.document.nodes[2] as ListItemNode).type, ListItemType.unordered);
+
+        expect(context.document.nodes[3], isA<ListItemNode>());
+        expect((context.document.nodes[3] as ListItemNode).type, ListItemType.ordered);
+
+        expect(context.document.nodes[4], isA<ListItemNode>());
+        expect((context.document.nodes[4] as ListItemNode).type, ListItemType.unordered);
+
+        expect(context.document.nodes[5], isA<ListItemNode>());
+        expect((context.document.nodes[5] as ListItemNode).type, ListItemType.unordered);
+
+        // Ensure the sequence was kept.
+        final firstOrderedItem = tester.widget<OrderedListItemComponent>(
+          find.ancestor(
+            of: find.byWidget(SuperEditorInspector.findWidgetForComponent(context.document.nodes[0].id)),
+            matching: find.byType(OrderedListItemComponent),
+          ),
+        );
+        expect(firstOrderedItem.listIndex, 1);
+
+        final secondOrderedItem = tester.widget<OrderedListItemComponent>(
+          find.ancestor(
+            of: find.byWidget(SuperEditorInspector.findWidgetForComponent(context.document.nodes[3].id)),
+            matching: find.byType(OrderedListItemComponent),
+          ),
+        );
+        expect(secondOrderedItem.listIndex, 2);
+      });
+
+      testWidgetsOnArbitraryDesktop('does not keep sequence for items split by paragraphs', (tester) async {
+        final context = await tester //
+            .createDocument()
+            .fromMarkdown("""
+1. First ordered item
+
+A paragraph
+
+2. Second ordered item""") //
+            .pump();
+
+        expect(context.document.nodes.length, 3);
+
+        // Ensure the nodes have the correct type.
+        expect(context.document.nodes[0], isA<ListItemNode>());
+        expect((context.document.nodes[0] as ListItemNode).type, ListItemType.ordered);
+
+        expect(context.document.nodes[1], isA<ParagraphNode>());
+
+        expect(context.document.nodes[2], isA<ListItemNode>());
+        expect((context.document.nodes[2] as ListItemNode).type, ListItemType.ordered);
+
+        // Ensure the sequence reset when reaching the second list item.
+        final firstOrderedItem = tester.widget<OrderedListItemComponent>(
+          find.ancestor(
+            of: find.byWidget(SuperEditorInspector.findWidgetForComponent(context.document.nodes[0].id)),
+            matching: find.byType(OrderedListItemComponent),
+          ),
+        );
+        expect(firstOrderedItem.listIndex, 1);
+
+        final secondOrderedItem = tester.widget<OrderedListItemComponent>(
+          find.ancestor(
+            of: find.byWidget(SuperEditorInspector.findWidgetForComponent(context.document.nodes[2].id)),
+            matching: find.byType(OrderedListItemComponent),
+          ),
+        );
+        expect(secondOrderedItem.listIndex, 1);
+      });
+
       testWidgetsOnArbitraryDesktop('updates caret position when indenting', (tester) async {
         await _pumpOrderedListWithTextField(tester);
 
